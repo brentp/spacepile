@@ -2,6 +2,7 @@ use anyhow::{anyhow, Error, Result};
 use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
 use rust_htslib::bam::{Read, Reader, Record};
 //use std::error::Error;
+use std::ops::Index;
 use std::string::String;
 
 pub struct SpacePile {
@@ -59,9 +60,45 @@ pub fn iterate(bam_path: String, grouping_tag: String) -> Result<usize> {
     Ok(0)
 }
 
+struct CigTracker<'a> {
+    op_i: u16,
+    /// tracks which op we are in.
+    off: u16,
+    /// total offset within the read.
+    dels: u16,
+    cigar: &'a CigarStringView,
+    len: u32,
+}
+
+impl Index<usize> for CigTracker<'_> {
+    type Output = u32;
+    fn index(&self, i: usize) -> &u32 {
+        // TODO:
+        &0
+    }
+}
+
 pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u16>>> {
-    let r = vec![vec![0u16]];
-    Ok(r)
+    let mut offsets: Vec<CigTracker> = cigars
+        .iter()
+        .map(|c| CigTracker {
+            cigar: c,
+            dels: 0,
+            op_i: 0,
+            off: 0,
+            len: c.iter().map(|o| o.len()).sum(),
+        })
+        .collect();
+    let max_len = [
+        max_length,
+        offsets.iter().map(|c| c.len).max().unwrap() as u16,
+    ];
+
+    while true {
+        break;
+    }
+
+    Ok(vec![])
 }
 
 #[cfg(test)]
