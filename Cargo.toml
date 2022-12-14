@@ -1,0 +1,11 @@
+[package]
+name = "spacepile"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = {version = "1.0.66", features= ["std", "backtrace"]}
+clap = { version = "4.0.29", features = ["derive"] }
+rust-htslib = { version="0.40.2", features=["static", "gcs", "s3", "libdeflate"]}
