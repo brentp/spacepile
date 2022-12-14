@@ -61,13 +61,13 @@ pub fn iterate(bam_path: String, grouping_tag: String) -> Result<usize> {
 }
 
 struct CigTracker<'a> {
+    cigar: &'a CigarStringView,
+    len: u32,
     op_i: u16,
     /// tracks which op we are in.
     off: u16,
     /// total offset within the read.
     dels: u16,
-    cigar: &'a CigarStringView,
-    len: u32,
 }
 
 impl Index<usize> for CigTracker<'_> {
@@ -89,12 +89,18 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             len: c.iter().map(|o| o.len()).sum(),
         })
         .collect();
-    let max_len = [
+    let max_len = std::cmp::min(
         max_length,
         offsets.iter().map(|c| c.len).max().unwrap() as u16,
-    ];
+    );
+
+    let result: Vec<Vec<u16>> = offsets
+        .iter()
+        .map(|_| Vec::with_capacity(max_len as usize))
+        .collect();
 
     while true {
+        // BRENT start here.
         break;
     }
 
@@ -114,6 +120,7 @@ mod tests {
         let a = make(vec![Cigar::Match(4)], 0);
         let b = make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0);
         let cigs = vec![a, b];
+        eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
         space(&cigs, 7).expect("oh no");
     }
 }
