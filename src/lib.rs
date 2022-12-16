@@ -90,6 +90,17 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
         .iter()
         .map(|_| Vec::with_capacity(max_len as usize))
         .collect();
+    let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
+    // if some reads start later, prepend '$' to pad.
+    offsets
+        .iter()
+        .enumerate()
+        .filter(|(i, o)| o.cigar.pos() > min_start)
+        .for_each(|(i, o)| {
+            for _ in 0..(o.cigar.pos() - min_start) {
+                result[i].push(Encoding::End as u16)
+            }
+        });
 
     let mut L = 0;
     while offsets.iter().any(|o| o.idx < o.len as u16) {
@@ -179,9 +190,15 @@ mod tests {
     fn simple_spacing() {
         let a = make(vec![Cigar::Match(4)], 0);
         let b = make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0);
-        let cigs = vec![a, b];
+        let c = make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1);
+        let cigs = vec![a, b, c];
         eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
         let s = space(&cigs, 7).expect("oh no");
-        eprintln!("{:?}", s);
+        let exp: Vec<Vec<u16>> = vec![
+            vec![0, 1, 2, 3, 65535, 65535, 65535],
+            vec![0, 1, 2, 3, 4, 5, 6],
+            vec![65535, 0, 1, 2, 3, 4, 65535],
+        ];
+        assert_eq!(s, exp);
     }
 }
