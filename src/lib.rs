@@ -105,8 +105,12 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
     let mut L = 0;
     while offsets.iter().any(|o| o.idx < o.len as u16) {
         let any_insertion = offsets.iter().any(|o| {
-            if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
-                true
+            if (o.op_i as usize) < o.cigar.iter().len() {
+                if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
@@ -139,15 +143,16 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
                 } else if o.idx >= o.len {
                     result[i].push(Encoding::End as u16);
                 } else {
-                    if let Cigar::Del(ilen) = o.cigar[o.op_i as usize] {
-                        o.op_off += 1;
-                        if o.op_off == ilen as u16 {
-                            o.op_i += 1;
-                            o.op_off = 0;
-                        }
+                    if let Cigar::Del(_) = o.cigar[o.op_i as usize] {
+                        o.dels += 1;
                         result[i].push(Encoding::Space as u16);
                     } else {
                         result[i].push(o.idx - o.dels);
+                    }
+                    o.op_off += 1;
+                    if o.op_off == o.cigar[o.op_i as usize].len() as u16 {
+                        o.op_i += 1;
+                        o.op_off = 0;
                     }
                     o.idx += 1;
                 }
@@ -188,17 +193,40 @@ mod tests {
 
     #[test]
     fn simple_spacing() {
-        let a = make(vec![Cigar::Match(4)], 0);
-        let b = make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0);
-        let c = make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1);
-        let cigs = vec![a, b, c];
-        eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
-        let s = space(&cigs, 7).expect("oh no");
-        let exp: Vec<Vec<u16>> = vec![
-            vec![0, 1, 2, 3, 65535, 65535, 65535],
-            vec![0, 1, 2, 3, 4, 5, 6],
-            vec![65535, 0, 1, 2, 3, 4, 65535],
+        let cigs = vec![
+            make(vec![Cigar::Match(4)], 0), //                                 ACTG
+            make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1), // $CT  C
+                                            //make(vec![Cigar::Match(2), Cigar::Ins(2), Cigar::Match(1)], 0),
         ];
-        assert_eq!(s, exp);
+        eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
+        let obs = space(&cigs, 7).expect("oh no");
+        let exp: Vec<Vec<u16>> = vec![
+            vec![0, 1, 2, 3, 65535, 65535],
+            vec![65535, 0, 1, 65534, 65534, 2],
+        ];
+        assert_eq!(obs, exp);
+
+        let cigs = vec![
+            make(vec![Cigar::Match(4)], 0), //                                 AC   TG
+            make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1), // $C   T C
+            make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0), // ACGGGTG
+        ];
+        // AC   TG
+        // $CG  TG
+        // ACGGGTG
+        let obs = space(&cigs, 7).expect("oh no");
+        let exp = vec![
+            vec![0, 1, 65534, 65534],
+            vec![65535, 0, 65534, 65534],
+            vec![0, 1, 2, 3, 4, 5],
+        ];
+
+        // TODO: handle insertion and deletion at same place. not sure this is correct.
+        let exp = vec![
+            vec![0, 1, 65534, 65534, 65534, 2, 3, 65535, 65535],
+            vec![65535, 0, 65534, 65534, 65534, 1, 65534, 65534, 2],
+            vec![0, 1, 2, 3, 4, 5, 6, 65535, 65535],
+        ];
+        assert_eq!(obs, exp);
     }
 }
