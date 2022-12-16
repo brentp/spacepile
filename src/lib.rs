@@ -19,7 +19,7 @@ impl Iterator for SpacePile {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut parts = Vec::new();
-        while let Some(r) = self.bam.read(&mut self.record) {
+        while let Some(_) = self.bam.read(&mut self.record) {
             let tag = self.record.aux(self.grouping_tag.as_bytes());
             let group = if let Ok(group) = tag {
                 match group {
@@ -60,6 +60,7 @@ pub fn iterate(bam_path: String, grouping_tag: String) -> Result<usize> {
     Ok(0)
 }
 
+#[allow(dead_code)]
 enum Encoding {
     A = 0,
     C = 1,
@@ -102,7 +103,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             }
         });
 
-    let mut L = 0;
+    let mut sweep_i = 0;
     while offsets.iter().any(|o| o.idx < o.len as u16) {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
@@ -119,7 +120,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             // found an insertion so we have to add a space in any read that did not have an
             // insertion. and add the base for the ones that did.
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
-                if result[i].len() > L {
+                if result[i].len() > sweep_i {
                     // continue
                 } else if o.idx >= o.len {
                     result[i].push(Encoding::End as u16);
@@ -138,7 +139,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
         } else {
             // no insertion so we add the base or del at each position.
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
-                if result[i].len() > L {
+                if result[i].len() > sweep_i {
                     // continue
                 } else if o.idx >= o.len {
                     result[i].push(Encoding::End as u16);
@@ -159,7 +160,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             });
         }
 
-        L += 1;
+        sweep_i += 1;
     }
 
     Ok(result)
@@ -207,9 +208,9 @@ mod tests {
         assert_eq!(obs, exp);
 
         let cigs = vec![
-            make(vec![Cigar::Match(4)], 0), //                                 AC   TG
-            make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1), // $C   T C
-            make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0), // ACGGGTG
+            make(vec![Cigar::Match(4)], 0), //                                 AC   TG$$
+            make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1), // $C   T  C
+            make(vec![Cigar::Match(2), Cigar::Ins(3), Cigar::Match(2)], 0), // ACGGGTG$$
         ];
         // AC   TG
         // $CG  TG

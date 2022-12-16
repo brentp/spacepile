@@ -9,3 +9,6 @@ edition = "2021"
 anyhow = {version = "1.0.66", features= ["std", "backtrace"]}
 clap = { version = "4.0.29", features = ["derive"] }
 rust-htslib = { git = "https://github.com/brentp/rust-htslib", branch="csv-pos", features=["static", "gcs", "s3", "libdeflate"]}
+
+[lib]
+crate-type = ["cdylib", "rlib"]
