@@ -2,6 +2,8 @@ use anyhow::{anyhow, Error, Result};
 use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
 use rust_htslib::bam::{Read, Reader, Record};
 //use std::error::Error;
+use ndarray::prelude::*;
+use ndarray::{Array, Array2, Ix2};
 use std::ops::Index;
 use std::string::String;
 
@@ -70,7 +72,7 @@ enum Encoding {
     Space = -2,
 }
 
-pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u16>>> {
+pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
         .map(|c| CigTracker {
@@ -82,29 +84,23 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             len: c.iter().map(|o| o.len() as u16).sum(),
         })
         .collect();
-    let max_len = std::cmp::min(
-        max_length,
-        offsets.iter().map(|c| c.len).max().unwrap() as u16,
-    );
 
-    let mut result: Vec<Vec<u16>> = offsets
-        .iter()
-        .map(|_| Vec::with_capacity(max_len as usize))
-        .collect();
+    let mut result =
+        Array2::<u16>::zeros((offsets.len(), max_length as usize).f()) + Encoding::End as u16;
+    //    = offsets
+    //    .iter()
+    //    .map(|_| Vec::with_capacity(max_len as usize))
+    //    .collect();
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
     // if some reads start later, prepend '$' to pad.
-    offsets
-        .iter()
-        .enumerate()
-        .filter(|(i, o)| o.cigar.pos() > min_start)
-        .for_each(|(i, o)| {
-            for _ in 0..(o.cigar.pos() - min_start) {
-                result[i].push(Encoding::End as u16)
-            }
-        });
+    //offsets.iter().enumerate().for_each(|(i, o)| {
+    //    for j in 0..(o.cigar.pos() - min_start) {
+    //        result[(i, j as usize)] = Encoding::End as u16;
+    //    }
+    //});
 
-    let mut sweep_i = 0;
-    while offsets.iter().any(|o| o.idx < o.len as u16) {
+    let mut sweep_col: usize = 0;
+    while sweep_col < max_length as usize && offsets.iter().any(|o| o.idx < o.len as u16) {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
                 if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
@@ -120,35 +116,42 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             // found an insertion so we have to add a space in any read that did not have an
             // insertion. and add the base for the ones that did.
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
-                if result[i].len() > sweep_i {
+                // this read started after. we already filled with Encoding::End above so here we
+                // simply skip
+                if o.cigar.pos() > min_start + sweep_col as i64 {
+                    //if result[(i, sweep_col)] == Encoding::End as u16 {
                     // continue
                 } else if o.idx >= o.len {
-                    result[i].push(Encoding::End as u16);
+                    result[(i, sweep_col)] = Encoding::End as u16
                 } else if let Cigar::Ins(ilen) = o.cigar[o.op_i as usize] {
                     o.op_off += 1;
                     if o.op_off == ilen as u16 {
                         o.op_i += 1;
                         o.op_off = 0;
                     }
-                    result[i].push(o.idx - o.dels);
+                    result[(i, sweep_col)] = o.idx - o.dels;
                     o.idx += 1;
                 } else {
-                    result[i].push(Encoding::Space as u16)
+                    result[(i, sweep_col)] = Encoding::Space as u16;
                 }
             });
         } else {
             // no insertion so we add the base or del at each position.
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
-                if result[i].len() > sweep_i {
+                if o.cigar.pos() > min_start + sweep_col as i64 {
+                    eprintln!(
+                        "skipping: p: {:?} sweep_col:{sweep_col}, min_start:{min_start}",
+                        o.cigar.pos()
+                    );
                     // continue
                 } else if o.idx >= o.len {
-                    result[i].push(Encoding::End as u16);
+                    result[(i, sweep_col)] = Encoding::End as u16;
                 } else {
                     if let Cigar::Del(_) = o.cigar[o.op_i as usize] {
                         o.dels += 1;
-                        result[i].push(Encoding::Space as u16);
+                        result[(i, sweep_col)] = Encoding::Space as u16;
                     } else {
-                        result[i].push(o.idx - o.dels);
+                        result[(i, sweep_col)] = o.idx - o.dels;
                     }
                     o.op_off += 1;
                     if o.op_off == o.cigar[o.op_i as usize].len() as u16 {
@@ -160,7 +163,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Vec<Vec<u
             });
         }
 
-        sweep_i += 1;
+        sweep_col += 1;
     }
 
     Ok(result)
@@ -200,11 +203,9 @@ mod tests {
                                             //make(vec![Cigar::Match(2), Cigar::Ins(2), Cigar::Match(1)], 0),
         ];
         eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
-        let obs = space(&cigs, 7).expect("oh no");
-        let exp: Vec<Vec<u16>> = vec![
-            vec![0, 1, 2, 3, 65535, 65535],
-            vec![65535, 0, 1, 65534, 65534, 2],
-        ];
+        let obs = space(&cigs, 6).expect("oh no");
+        let exp: Array2<u16> = array![[0, 1, 2, 3, 65535, 65535], [65535, 0, 1, 65534, 65534, 2],];
+        //                                                        [0, 1, 65534, 65534, 2, 65535]]
         assert_eq!(obs, exp);
 
         let cigs = vec![
@@ -215,18 +216,13 @@ mod tests {
         // AC   TG
         // $CG  TG
         // ACGGGTG
-        let obs = space(&cigs, 7).expect("oh no");
-        let exp = vec![
-            vec![0, 1, 65534, 65534],
-            vec![65535, 0, 65534, 65534],
-            vec![0, 1, 2, 3, 4, 5],
-        ];
+        let obs = space(&cigs, 9).expect("oh no");
 
         // TODO: handle insertion and deletion at same place. not sure this is correct.
-        let exp = vec![
-            vec![0, 1, 65534, 65534, 65534, 2, 3, 65535, 65535],
-            vec![65535, 0, 65534, 65534, 65534, 1, 65534, 65534, 2],
-            vec![0, 1, 2, 3, 4, 5, 6, 65535, 65535],
+        let exp: Array2<u16> = array![
+            [0, 1, 65534, 65534, 65534, 2, 3, 65535, 65535],
+            [65535, 0, 65534, 65534, 65534, 1, 65534, 65534, 2],
+            [0, 1, 2, 3, 4, 5, 6, 65535, 65535],
         ];
         assert_eq!(obs, exp);
     }
