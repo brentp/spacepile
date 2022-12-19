@@ -1,66 +1,7 @@
-use anyhow::{anyhow, Error, Result};
-use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
-use rust_htslib::bam::{Read, Reader, Record};
-//use std::error::Error;
+use anyhow::Result;
 use ndarray::prelude::*;
-use ndarray::{Array, Array2, Ix2};
-use std::ops::Index;
-use std::string::String;
-
-pub struct SpacePile {
-    bam: Reader,
-    grouping_tag: String,
-    last_group: String,
-    max_length: u16,
-    record: Record,
-    error: Option<Error>,
-}
-
-impl Iterator for SpacePile {
-    type Item = Vec<Vec<u16>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut parts = Vec::new();
-        while let Some(_) = self.bam.read(&mut self.record) {
-            let tag = self.record.aux(self.grouping_tag.as_bytes());
-            let group = if let Ok(group) = tag {
-                match group {
-                    Aux::String(group) => group,
-                    _ => {
-                        self.error =
-                            Some(anyhow!("expecting sring tag for {:?}", self.grouping_tag));
-                        return None;
-                    }
-                }
-            } else {
-                return None;
-            };
-            if parts.len() > 0 && self.last_group != group {
-                space(&parts, self.max_length);
-                parts.clear();
-                self.last_group = String::from(group);
-            }
-            let cig = self.record.cigar();
-            parts.push(cig);
-        }
-        None
-    }
-}
-
-pub fn iterate(bam_path: String, grouping_tag: String) -> Result<usize> {
-    let mut bam = Reader::from_path(&bam_path)?;
-
-    let mut sp = SpacePile {
-        bam,
-        grouping_tag: String::from(grouping_tag),
-        last_group: String::from(";;;;;;;"),
-        max_length: 152,
-        record: Record::new(),
-        error: None,
-    };
-
-    Ok(0)
-}
+use ndarray::Array2;
+use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[allow(dead_code)]
 enum Encoding {
@@ -72,6 +13,8 @@ enum Encoding {
     Space = -2,
 }
 
+/// Given a set of Cigar+Positions, create an Array of indexes that can be used to align
+/// the same set of variants.
 pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
@@ -87,17 +30,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
 
     let mut result =
         Array2::<u16>::zeros((offsets.len(), max_length as usize).f()) + Encoding::End as u16;
-    //    = offsets
-    //    .iter()
-    //    .map(|_| Vec::with_capacity(max_len as usize))
-    //    .collect();
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
-    // if some reads start later, prepend '$' to pad.
-    //offsets.iter().enumerate().for_each(|(i, o)| {
-    //    for j in 0..(o.cigar.pos() - min_start) {
-    //        result[(i, j as usize)] = Encoding::End as u16;
-    //    }
-    //});
 
     let mut sweep_col: usize = 0;
     while sweep_col < max_length as usize && offsets.iter().any(|o| o.idx < o.len as u16) {
@@ -139,10 +72,6 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
             // no insertion so we add the base or del at each position.
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
                 if o.cigar.pos() > min_start + sweep_col as i64 {
-                    eprintln!(
-                        "skipping: p: {:?} sweep_col:{sweep_col}, min_start:{min_start}",
-                        o.cigar.pos()
-                    );
                     // continue
                 } else if o.idx >= o.len {
                     result[(i, sweep_col)] = Encoding::End as u16;
@@ -169,13 +98,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
     Ok(result)
 }
 
-impl Index<usize> for CigTracker<'_> {
-    type Output = u32;
-    fn index(&self, i: usize) -> &u32 {
-        &0
-    }
-}
-
+/// Tracking for converting a group of cigars to a multi-alignment.
 struct CigTracker<'a> {
     cigar: &'a CigarStringView,
     len: u16,
@@ -190,6 +113,7 @@ struct CigTracker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_htslib::bam::record::CigarString;
 
     fn make(cigs: Vec<Cigar>, pos: i64) -> CigarStringView {
         CigarStringView::new(CigarString(cigs), pos)

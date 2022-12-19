@@ -18,10 +18,17 @@ we want to sample wisely so we're not training on the same position 10,000 times
 
 [Paper covering this topic](https://arxiv.org/abs/1706.04599)
 
+NOTE: this one seems best. Just get pytorch model into sklearn-like class.
+https://github.com/dirichletcal/dirichlet_python
+
+See this python module: https://github.com/classifier-calibration/PyCalib
+
 The output from the model is not calibrated -- the error rates do not match the probabilities.
 This is a known problem.
 There is some work on this here:
 https://github.com/gpleiss/temperature_scaling (needs logits, not softmax)
+
+https://github.com/dirichletcal/experiments_dnn
 
 But this may require further work because of the positional info where the ends of reads
 often have lower quality.
