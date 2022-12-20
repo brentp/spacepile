@@ -1,6 +1,8 @@
 use anyhow::Result;
 use ndarray::prelude::*;
 use ndarray::Array2;
+use numpy::PyArrayDyn;
+use pyo3::{pymodule, types::PyModule, PyResult, Python};
 use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[allow(dead_code)]
@@ -55,7 +57,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
                     //if result[(i, sweep_col)] == Encoding::End as u16 {
                     // continue
                 } else if o.idx >= o.len {
-                    result[(i, sweep_col)] = Encoding::End as u16
+                    //result[(i, sweep_col)] = Encoding::End as u16
                 } else if let Cigar::Ins(ilen) = o.cigar[o.op_i as usize] {
                     o.op_off += 1;
                     if o.op_off == ilen as u16 {
@@ -74,7 +76,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
                 if o.cigar.pos() > min_start + sweep_col as i64 {
                     // continue
                 } else if o.idx >= o.len {
-                    result[(i, sweep_col)] = Encoding::End as u16;
+                    //result[(i, sweep_col)] = Encoding::End as u16;
                 } else {
                     if let Cigar::Del(_) = o.cigar[o.op_i as usize] {
                         o.dels += 1;
@@ -108,6 +110,17 @@ struct CigTracker<'a> {
     idx: u16,
     /// total offset within the read.
     dels: u16,
+}
+
+#[pymodule]
+fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    #[pyfn(m)]
+    #[pyo3(name = "space")]
+    fn rust_space<'py>(_py: Python<'py>, x: PyArrayDyn<i32>) -> &'py PyArrayDyn<u16> {
+        // TODO
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
