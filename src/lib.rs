@@ -116,8 +116,9 @@ struct CigTracker<'a> {
 fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "space")]
-    fn rust_space<'py>(_py: Python<'py>, x: PyArrayDyn<i32>) -> &'py PyArrayDyn<u16> {
-        // TODO
+    fn rust_space<'py>(_py: Python<'py>, x: &'py PyArrayDyn<i32>) -> &'py PyArrayDyn<u16> {
+        
+        todo!()
     }
 
     Ok(())
