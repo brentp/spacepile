@@ -1,7 +1,8 @@
 use anyhow::Result;
 use ndarray::prelude::*;
-use ndarray::Array2;
-use numpy::PyArrayDyn;
+use ndarray::ArrayViewMut2;
+//use numpy::borrow::PyReadwriteArray2;
+use numpy::PyArray2;
 use pyo3::{pymodule, types::PyModule, PyResult, Python};
 use rust_htslib::bam::record::{Cigar, CigarStringView};
 
@@ -18,6 +19,16 @@ enum Encoding {
 /// Given a set of Cigar+Positions, create an Array of indexes that can be used to align
 /// the same set of variants.
 pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
+
+    let mut result =
+        Array2::<u16>::zeros((cigars.len(), max_length as usize).f()) + Encoding::End as u16;
+    
+    let mut v = result.view_mut();
+    space_fill(cigars, max_length, &mut v);
+    Ok(result)
+}
+
+pub fn space_fill(cigars: &Vec<CigarStringView>, max_length: u16, result: &mut ArrayViewMut2<u16>) -> Result<()> {
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
         .map(|c| CigTracker {
@@ -29,9 +40,6 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
             len: c.iter().map(|o| o.len() as u16).sum(),
         })
         .collect();
-
-    let mut result =
-        Array2::<u16>::zeros((offsets.len(), max_length as usize).f()) + Encoding::End as u16;
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
 
     let mut sweep_col: usize = 0;
@@ -97,8 +105,9 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
         sweep_col += 1;
     }
 
-    Ok(result)
+    Ok(())
 }
+
 
 /// Tracking for converting a group of cigars to a multi-alignment.
 struct CigTracker<'a> {
@@ -116,7 +125,11 @@ struct CigTracker<'a> {
 fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "space")]
-    fn rust_space<'py>(_py: Python<'py>, x: &'py PyArrayDyn<i32>) -> &'py PyArrayDyn<u16> {
+    fn rust_space<'py>(_py: Python<'py>, x: &PyArray2<u16>) -> PyResult<()> {
+        //let mut y = x.readwrite();
+        let mut y = unsafe { x.as_array_mut() };
+        let mut cigs = vec![];
+        space_fill(&cigs, 128, &mut y);
         
         todo!()
     }
