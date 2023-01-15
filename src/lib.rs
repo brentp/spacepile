@@ -3,7 +3,7 @@ use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
 //use numpy::borrow::PyReadwriteArray2;
 use numpy::PyArray2;
-use pyo3::{exceptions, pymodule, types::{PyModule, PyList, PyTuple}, PyResult, Python};
+use pyo3::{exceptions, pymodule, types::{PyModule, PyList}, PyResult, Python};
 use rust_htslib::bam::record::{Cigar, CigarStringView, CigarString};
 
 #[allow(dead_code)]
@@ -124,7 +124,12 @@ struct CigTracker<'a> {
 }
 
 #[pymodule]
-fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+
+    /// space(array, py_cigs, py_positions, /)
+    /// --
+    /// 
+    /// fill array with spaced from py_cigs and positions. array.shape[0] == len(py_cigs) == len(py_positions)
     #[pyfn(m)]
     #[pyo3(name = "space")]
     fn rust_space<'py>(
