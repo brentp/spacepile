@@ -125,13 +125,12 @@ struct CigTracker<'a> {
 fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "space")]
-    fn rust_space<'py>(_py: Python<'py>, x: &PyArray2<u16>) -> PyResult<()> {
+    fn rust_space<'py>(_py: Python<'py>, arr: &PyArray2<u16>) -> PyResult<()> {
         //let mut y = x.readwrite();
-        let mut y = unsafe { x.as_array_mut() };
+        let mut y = unsafe { arr.as_array_mut() };
         let mut cigs = vec![];
-        space_fill(&cigs, 128, &mut y);
-        
-        todo!()
+        _ = space_fill(&cigs, 128, &mut y);
+        Ok(())
     }
 
     Ok(())
