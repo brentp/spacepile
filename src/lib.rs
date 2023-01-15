@@ -3,8 +3,8 @@ use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
 //use numpy::borrow::PyReadwriteArray2;
 use numpy::PyArray2;
-use pyo3::{pymodule, types::PyModule, PyResult, Python};
-use rust_htslib::bam::record::{Cigar, CigarStringView};
+use pyo3::{exceptions, pymodule, types::{PyModule, PyList, PyTuple}, PyResult, Python};
+use rust_htslib::bam::record::{Cigar, CigarStringView, CigarString};
 
 #[allow(dead_code)]
 enum Encoding {
@@ -19,16 +19,19 @@ enum Encoding {
 /// Given a set of Cigar+Positions, create an Array of indexes that can be used to align
 /// the same set of variants.
 pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
-
     let mut result =
         Array2::<u16>::zeros((cigars.len(), max_length as usize).f()) + Encoding::End as u16;
-    
+
     let mut v = result.view_mut();
     space_fill(cigars, max_length, &mut v);
     Ok(result)
 }
 
-pub fn space_fill(cigars: &Vec<CigarStringView>, max_length: u16, result: &mut ArrayViewMut2<u16>) -> Result<()> {
+pub fn space_fill(
+    cigars: &Vec<CigarStringView>,
+    max_length: u16,
+    result: &mut ArrayViewMut2<u16>,
+) -> Result<()> {
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
         .map(|c| CigTracker {
@@ -108,7 +111,6 @@ pub fn space_fill(cigars: &Vec<CigarStringView>, max_length: u16, result: &mut A
     Ok(())
 }
 
-
 /// Tracking for converting a group of cigars to a multi-alignment.
 struct CigTracker<'a> {
     cigar: &'a CigarStringView,
@@ -125,10 +127,47 @@ struct CigTracker<'a> {
 fn rust_space(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     #[pyo3(name = "space")]
-    fn rust_space<'py>(_py: Python<'py>, arr: &PyArray2<u16>) -> PyResult<()> {
+    fn rust_space<'py>(
+        _py: Python<'py>,
+        arr: &PyArray2<u16>,
+        py_cigs: &PyList,
+        py_positions: &PyList
+    ) -> PyResult<()> {
         //let mut y = x.readwrite();
         let mut y = unsafe { arr.as_array_mut() };
-        let mut cigs = vec![];
+        if py_cigs.len() != py_positions.len() {
+              return Err(exceptions::PyTypeError::new_err("space: expecting py_cigs and py_positions of equal length"));
+        } 
+        if py_cigs.len() != arr.dims()[0] {
+              return Err(exceptions::PyTypeError::new_err("space: expecting py_cigs to have length equal to rows in arr"));
+        } 
+
+        let cigs: Vec<CigarStringView> = py_cigs
+            .iter()
+            .enumerate()
+            .map(|(i, cl)| {
+                    let cs:Vec<Cigar> = cl.downcast::<PyList>().expect("expecting list as 3rd argument to 'space'").iter()
+
+                        .map(|t| {
+                            let (op, len) = t.extract().unwrap();
+                            match op {
+                                0 => Cigar::Match(len),
+                                1 => Cigar::Ins(len),
+                                2 => Cigar::Del(len),
+                                3 => Cigar::RefSkip(len),
+                                4 => Cigar::SoftClip(len),
+                                5 => Cigar::HardClip(len),
+                                6 => Cigar::Pad(len),
+                                7 => Cigar::Equal(len),
+                                8 => Cigar::Diff(len),
+                                _ => panic!("Unexpected cigar operation"),
+                            }
+                        })
+                        .collect();
+                    CigarString(cs).into_view(py_positions.get_item(i).expect("expecting element for position {i}").extract::<i64>().unwrap())
+                })
+            .collect();
+        //let mut cigs = vec![];
         _ = space_fill(&cigs, 128, &mut y);
         Ok(())
     }
