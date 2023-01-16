@@ -3,8 +3,12 @@ use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
 //use numpy::borrow::PyReadwriteArray2;
 use numpy::PyArray2;
-use pyo3::{exceptions, pymodule, types::{PyModule, PyList}, PyResult, Python};
-use rust_htslib::bam::record::{Cigar, CigarStringView, CigarString};
+use pyo3::{
+    exceptions, py_run, pymodule,
+    types::{PyDict, PyList, PyModule},
+    PyResult, Python,
+};
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 
 #[allow(dead_code)]
 enum Encoding {
@@ -125,10 +129,9 @@ struct CigTracker<'a> {
 
 #[pymodule]
 fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-
     /// space(array, py_cigs, py_positions, /)
     /// --
-    /// 
+    ///
     /// fill array with spaced from py_cigs and positions. array.shape[0] == len(py_cigs) == len(py_positions)
     #[pyfn(m)]
     #[pyo3(name = "space")]
@@ -136,41 +139,53 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         _py: Python<'py>,
         arr: &PyArray2<u16>,
         py_cigs: &PyList,
-        py_positions: &PyList
+        py_positions: &PyList,
     ) -> PyResult<()> {
         //let mut y = x.readwrite();
         let mut y = unsafe { arr.as_array_mut() };
         if py_cigs.len() != py_positions.len() {
-              return Err(exceptions::PyTypeError::new_err("space: expecting py_cigs and py_positions of equal length"));
-        } 
+            return Err(exceptions::PyTypeError::new_err(
+                "space: expecting py_cigs and py_positions of equal length",
+            ));
+        }
         if py_cigs.len() != arr.dims()[0] {
-              return Err(exceptions::PyTypeError::new_err("space: expecting py_cigs to have length equal to rows in arr"));
-        } 
+            return Err(exceptions::PyTypeError::new_err(
+                "space: expecting py_cigs to have length equal to rows in arr",
+            ));
+        }
 
         let cigs: Vec<CigarStringView> = py_cigs
             .iter()
             .enumerate()
             .map(|(i, cl)| {
-                    let cs:Vec<Cigar> = cl.downcast::<PyList>().expect("expecting list as 3rd argument to 'space'").iter()
-
-                        .map(|t| {
-                            let (op, len) = t.extract().unwrap();
-                            match op {
-                                0 => Cigar::Match(len),
-                                1 => Cigar::Ins(len),
-                                2 => Cigar::Del(len),
-                                3 => Cigar::RefSkip(len),
-                                4 => Cigar::SoftClip(len),
-                                5 => Cigar::HardClip(len),
-                                6 => Cigar::Pad(len),
-                                7 => Cigar::Equal(len),
-                                8 => Cigar::Diff(len),
-                                _ => panic!("Unexpected cigar operation"),
-                            }
-                        })
-                        .collect();
-                    CigarString(cs).into_view(py_positions.get_item(i).expect("expecting element for position {i}").extract::<i64>().unwrap())
-                })
+                let cs: Vec<Cigar> = cl
+                    .downcast::<PyList>()
+                    .expect("expecting list as 3rd argument to 'space'")
+                    .iter()
+                    .map(|t| {
+                        let (op, len) = t.extract().unwrap();
+                        match op {
+                            0 => Cigar::Match(len),
+                            1 => Cigar::Ins(len),
+                            2 => Cigar::Del(len),
+                            3 => Cigar::RefSkip(len),
+                            4 => Cigar::SoftClip(len),
+                            5 => Cigar::HardClip(len),
+                            6 => Cigar::Pad(len),
+                            7 => Cigar::Equal(len),
+                            8 => Cigar::Diff(len),
+                            _ => panic!("Unexpected cigar operation"),
+                        }
+                    })
+                    .collect();
+                CigarString(cs).into_view(
+                    py_positions
+                        .get_item(i)
+                        .expect("expecting element for position {i}")
+                        .extract::<i64>()
+                        .unwrap(),
+                )
+            })
             .collect();
         //let mut cigs = vec![];
         _ = space_fill(&cigs, 128, &mut y);
@@ -190,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_spacing() {
+    fn test_spacing() {
         let cigs = vec![
             make(vec![Cigar::Match(4)], 0), //                                 ACTG
             make(vec![Cigar::Match(2), Cigar::Del(2), Cigar::Match(1)], 1), // $CT  C
@@ -219,5 +234,35 @@ mod tests {
             [0, 1, 2, 3, 4, 5, 6, 65535, 65535],
         ];
         assert_eq!(obs, exp);
+    }
+
+    #[test]
+    fn test_from_python() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            let r = py.run(
+                r#"
+import numpy as np
+import spacepile
+import pysam
+            
+a = np.zeros((1, 5), dtype=np.uint16)
+cigs = [[(int(pysam.CMATCH), 5)]]
+
+posns = [0]
+spacepile.space(a, cigs, posns)
+assert np.array_equal(a.flatten(), np.arange(5, dtype=np.uint16))
+        "#,
+                None,
+                Some(locals),
+            );
+            if r.is_err() {
+                eprintln!("error: {:?}", r.err());
+                assert!(false);
+            } else {
+                assert!(r.is_ok());
+            }
+        });
     }
 }
