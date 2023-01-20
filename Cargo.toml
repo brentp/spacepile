@@ -10,8 +10,14 @@ anyhow = {version = "1.0.66", features= ["std", "backtrace"]}
 clap = { version = "4.0.29", features = ["derive"] }
 ndarray = { version = "0.15.6", features=["std", "rayon"]}
 numpy =  { version = "0.17.2"}
-pyo3 = { version = "0.17.3", features=["extension-module"]}
 rust-htslib = { git = "https://github.com/brentp/rust-htslib", branch="csv-pos", features=["static", "gcs", "s3", "libdeflate"]}
+
+[dependencies.pyo3]
+version = "0.17.3"
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

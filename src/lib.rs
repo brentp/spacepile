@@ -192,6 +192,39 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         Ok(())
     }
 
+    /// translate(space, array, /)
+    /// --
+    ///
+    /// use `space` to translate  `sequences` (of sequence or BQs, for example) into `array`. `space` and `array` must be
+    /// the same shape and `len(sequences) == space.shape[0]`
+    #[pyfn(m)]
+    #[pyo3(name = "translate")]
+    fn translate<'py>(_py: Python<'py>, spaced: &PyArray2<u16>, sequences: &PyArray2<i16>, out: &PyArray2<i16>) -> PyResult<()> {
+        if spaced.dims()[0] != sequences.dims()[0] {
+            return Err(exceptions::PyTypeError::new_err(
+                "translate: expecting spaced and sequences to have equal first dimension",
+            ));
+        }
+        if spaced.dims()[0] != out.dims()[0] {
+            return Err(exceptions::PyTypeError::new_err(
+                "translate: expecting spaced and out to have equal first dimension",
+            ));
+        }
+        let mut out_mut = unsafe { out.as_array_mut() };
+
+        for i in 0..spaced.dims()[0] {
+            for j in 0..spaced.dims()[1] {
+                out_mut[(i, j)] = 2
+
+            }
+
+        }
+
+
+
+        Ok(())
+    }
+
     Ok(())
 }
 
@@ -247,12 +280,13 @@ import numpy as np
 import spacepile
 import pysam
             
-a = np.zeros((1, 5), dtype=np.uint16)
+a = np.zeros((2, 5), dtype=np.uint16)
 cigs = [[(int(pysam.CMATCH), 5)]]
 
 posns = [0]
-spacepile.space(a, cigs, posns)
-assert np.array_equal(a.flatten(), np.arange(5, dtype=np.uint16))
+# NOTE we can send a slice
+spacepile.space(a[0:1], cigs, posns)
+assert np.array_equal(a[0].flatten(), np.arange(5, dtype=np.uint16))
         "#,
                 None,
                 Some(locals),
