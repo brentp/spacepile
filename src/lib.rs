@@ -1,11 +1,10 @@
 use anyhow::Result;
 use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
-//use numpy::borrow::PyReadwriteArray2;
 use numpy::PyArray2;
 use pyo3::{
-    exceptions, py_run, pymodule,
-    types::{PyDict, PyList, PyModule},
+    exceptions, pymodule,
+    types::{PyList, PyModule},
     PyResult, Python,
 };
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
@@ -199,29 +198,28 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     /// the same shape and `len(sequences) == space.shape[0]`
     #[pyfn(m)]
     #[pyo3(name = "translate")]
-    fn translate<'py>(_py: Python<'py>, spaced: &PyArray2<u16>, sequences: &PyArray2<i16>, out: &PyArray2<i16>) -> PyResult<()> {
-        if spaced.dims()[0] != sequences.dims()[0] {
+    fn translate<'py>(_py: Python<'py>, spaced_idxs: &PyArray2<u16>, sequences: &PyArray2<i16>, out: &PyArray2<i16>) -> PyResult<()> {
+        if spaced_idxs.dims()[0] != sequences.dims()[0] {
             return Err(exceptions::PyTypeError::new_err(
                 "translate: expecting spaced and sequences to have equal first dimension",
             ));
         }
-        if spaced.dims()[0] != out.dims()[0] {
+        if spaced_idxs.dims()[0] != out.dims()[0] {
             return Err(exceptions::PyTypeError::new_err(
                 "translate: expecting spaced and out to have equal first dimension",
             ));
         }
         let mut out_mut = unsafe { out.as_array_mut() };
+        let spaced_raw = unsafe { spaced_idxs.as_array() };
+        let sequences_raw = unsafe { sequences.as_array() };
 
-        for i in 0..spaced.dims()[0] {
-            for j in 0..spaced.dims()[1] {
-                out_mut[(i, j)] = 2
-
+        for i in 0..spaced_idxs.dims()[0] {
+            for j in 0..spaced_idxs.dims()[1] {
+                let space_j = spaced_raw[(i, j)];
+                let si = sequences_raw[(i, space_j as usize)];
+                out_mut[(i, j)] = si;
             }
-
         }
-
-
-
         Ok(())
     }
 
@@ -232,6 +230,7 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 mod tests {
     use super::*;
     use rust_htslib::bam::record::CigarString;
+    use pyo3::types::{PyDict};
 
     fn make(cigs: Vec<Cigar>, pos: i64) -> CigarStringView {
         CigarStringView::new(CigarString(cigs), pos)
