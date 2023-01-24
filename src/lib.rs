@@ -298,4 +298,41 @@ assert np.array_equal(a[0].flatten(), np.arange(5, dtype=np.uint16))
             }
         });
     }
+
+    #[test]
+    fn test_translate_from_python() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            let r = py.run(
+                r#"
+import numpy as np
+import spacepile
+import pysam
+            
+a = np.zeros((2, 5), dtype=np.uint16)
+cigs = [[(int(pysam.CMATCH), 5)]]
+
+posns = [0]
+# NOTE we can send a slice
+spacepile.space(a[0:1], cigs, posns)
+mat = np.zeros((1, 5), dtype=np.int16)
+seqs = np.array([
+    list('ACTTG')
+    ], dtype='U1').view(np.int32).astype(np.int16)
+spacepile.translate(a[0:1], seqs, mat)
+assert "".join(chr(x) for x in mat[0]) == 'ACTTG', [chr(x) for x in mat[0]]
+        "#,
+                None,
+                Some(locals),
+            );
+            if r.is_err() {
+                eprintln!("error: {:?}", r.err());
+                assert!(false);
+            } else {
+                assert!(r.is_ok());
+            }
+        });
+
+    }
 }
