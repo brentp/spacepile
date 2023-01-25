@@ -311,7 +311,7 @@ import spacepile
 import pysam
             
 a = np.zeros((2, 5), dtype=np.uint16)
-cigs = [[(int(pysam.CMATCH), 5)]]
+cigs = [[(pysam.CMATCH, 5)]]
 
 posns = [0]
 # NOTE we can send a slice
