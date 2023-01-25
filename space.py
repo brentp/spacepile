@@ -6,16 +6,18 @@ import pysam
 
 # make matricies of at most this width. usually this will be ~ 10% longer than read-length
 max_width = 9
-# NOTE, these would likely be drawn from a bam file that is sorted by fragment (an option in samtools sort)
+# NOTE, these would likely be drawn from a bam file that is sorted by fragment (an option in samtools sort) or grouped by UMI
 # these are available as aln.cigartuples in pysam.
+# here we show 3 reads for an example.
 cigs = [
         [(pysam.CMATCH, 4)],                                     # read 1. 4M     ACTG
         [(pysam.CMATCH, 2), (pysam.CDEL, 2), (pysam.CMATCH, 1)], # read 2. 2M2D1M  CTC
         [(pysam.CMATCH, 2), (pysam.CINS, 3), (pysam.CMATCH, 2)], # read 2. 2M2D1M ACGGGTG
         ]
 
-posns = [0, 1, 0]
+posns = [0, 1, 0] # the 2nd read starts 1 base after the other reads.
 
+# idxs will be filled by `space` call.
 idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
 spacepile.space(idxs, cigs, posns)
 
@@ -33,7 +35,7 @@ base_qs =       [[ 40, 50, 60, 70], [60, 60, 60], [45, 45, 45, 55, 55, 55, 60]]
 sequences = np.zeros((len(cigs), max_width), dtype=np.int16)
 bqs = np.zeros_like(sequences)
 for i, s in enumerate(raw_sequences):
-    sequences[i, :len(s)] = np.array(list(s), dtype='U1').view(np.int32)
+    sequences[i, :len(s)] = np.array(list(s), dtype='U1').view(np.int32) # Q: is there a better way to do this in numpy?
     bqs[i, :len(s)] = np.array(base_qs[i], dtype=np.int32)
 
 
@@ -54,5 +56,5 @@ assert np.array_equal(mat[len(cigs):],
 			 [-1,60,-2,-2,-2,60,-2,-2,60],
 			 [45,45,45,55,55,55,60,-1,-1]])
 
-
+print(mat)
 # now repeat for many sequences and send many mats to a learner.
