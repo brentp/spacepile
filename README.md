@@ -121,3 +121,11 @@ network size.
 ### consensus
 
 Take a trained model and a bam and write a new fastq with well-calibrated base-qualities.
+
+
+## build notes
+
+```
+docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin build --release
+pip install target/wheels/spacepile-0.1.0-cp37-abi3-linux_x86_64.whl
+```
