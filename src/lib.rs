@@ -198,7 +198,12 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     /// the same shape and `len(sequences) == space.shape[0]`
     #[pyfn(m)]
     #[pyo3(name = "translate")]
-    fn translate<'py>(_py: Python<'py>, spaced_idxs: &PyArray2<u16>, sequences: &PyArray2<i16>, out: &PyArray2<i16>) -> PyResult<()> {
+    fn translate<'py>(
+        _py: Python<'py>,
+        spaced_idxs: &PyArray2<u16>,
+        sequences: &PyArray2<i16>,
+        out: &PyArray2<i16>,
+    ) -> PyResult<()> {
         if spaced_idxs.dims()[0] != sequences.dims()[0] {
             return Err(exceptions::PyTypeError::new_err(
                 "translate: expecting spaced and sequences to have equal first dimension",
@@ -229,8 +234,8 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::types::PyDict;
     use rust_htslib::bam::record::CigarString;
-    use pyo3::types::{PyDict};
 
     fn make(cigs: Vec<Cigar>, pos: i64) -> CigarStringView {
         CigarStringView::new(CigarString(cigs), pos)
@@ -333,6 +338,5 @@ assert "".join(chr(x) for x in mat[0]) == 'ACTTG', [chr(x) for x in mat[0]]
                 assert!(r.is_ok());
             }
         });
-
     }
 }
