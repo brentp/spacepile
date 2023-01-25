@@ -28,7 +28,7 @@ max_width = 9
 cigs = [
         [(pysam.CMATCH, 4)],                                     # read 1. 4M     ACTG
         [(pysam.CMATCH, 2), (pysam.CDEL, 2), (pysam.CMATCH, 1)], # read 2. 2M2D1M  CTC
-        [(pysam.CMATCH, 2), (pysam.CINS, 3), (pysam.CMATCH, 2)], # read 2. 2M2D1M ACGGGTG
+        [(pysam.CMATCH, 2), (pysam.CINS, 3), (pysam.CMATCH, 2)], # read 3. 2M3I2M ACGGGTG
         ]
 
 posns = [0, 1, 0] # the 2nd read starts 1 base after the other reads.
