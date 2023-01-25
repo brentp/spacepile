@@ -22,8 +22,7 @@ enum Encoding {
 /// Given a set of Cigar+Positions, create an Array of indexes that can be used to align
 /// the same set of variants.
 pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
-    let mut result =
-        Array2::<u16>::zeros((cigars.len(), max_length as usize).f()) + Encoding::End as u16;
+    let mut result = Array2::<u16>::zeros((cigars.len(), max_length as usize).f());
 
     let mut v = result.view_mut();
     space_fill(cigars, max_length, &mut v);
@@ -35,6 +34,7 @@ pub fn space_fill(
     max_length: u16,
     result: &mut ArrayViewMut2<u16>,
 ) -> Result<()> {
+    result.fill(Encoding::End as u16);
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
         .map(|c| CigTracker {
@@ -221,8 +221,10 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         for i in 0..spaced_idxs.dims()[0] {
             for j in 0..spaced_idxs.dims()[1] {
                 let space_j = spaced_raw[(i, j)];
-                let si = sequences_raw[(i, space_j as usize)];
-                out_mut[(i, j)] = si;
+                out_mut[(i, j)] = match space_j {
+                    65534 | 65535 => space_j as i16,
+                    _ => sequences_raw[(i, space_j as usize)],
+                }
             }
         }
         Ok(())
