@@ -32,14 +32,14 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
 fn consumes_either(op: &Cigar) -> bool {
     match op {
         Cigar::Pad(_) | Cigar::HardClip(_) => false,
-        _ => true
+        _ => true,
     }
 }
 
 fn consumes_query_pos(op: &Cigar) -> bool {
     match op {
         Cigar::Match(_) | Cigar::Ins(_) | Cigar::Equal(_) | Cigar::Diff(_) => true,
-        _ => false
+        _ => false,
     }
 }
 
@@ -57,14 +57,19 @@ pub fn space_fill(
             dels: 0,
             op_i: (!consumes_either(c.first().unwrap())) as u16, // we can skip the first hard-clip
             op_off: 0,
-            query_len: c.iter().map(|o| if consumes_either(o) { o.len() } else { 0 } as u16).sum(),
+            query_len: c
+                .iter()
+                .map(|o| if consumes_either(o) { o.len() } else { 0 } as u16)
+                .sum(),
         })
         .collect();
     eprintln!("{:?}", offsets);
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
 
     let mut sweep_col: usize = 0;
-    while sweep_col < max_length as usize && offsets.iter().any(|o| o.query_idx < o.query_len as u16) {
+    while sweep_col < max_length as usize
+        && offsets.iter().any(|o| o.query_idx < o.query_len as u16)
+    {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
                 if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
