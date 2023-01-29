@@ -29,6 +29,20 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
     Ok(result)
 }
 
+fn consumes_either(op: &Cigar) -> bool {
+    match op {
+        Cigar::Pad(_) | Cigar::HardClip(_) => false,
+        _ => true
+    }
+}
+
+fn consumes_query_pos(op: &Cigar) -> bool {
+    match op {
+        Cigar::Match(_) | Cigar::Ins(_) | Cigar::Equal(_) | Cigar::Diff(_) => true,
+        _ => false
+    }
+}
+
 pub fn space_fill(
     cigars: &Vec<CigarStringView>,
     max_length: u16,
@@ -39,17 +53,18 @@ pub fn space_fill(
         .iter()
         .map(|c| CigTracker {
             cigar: c,
-            idx: 0,
+            query_idx: 0,
             dels: 0,
-            op_i: 0,
+            op_i: (!consumes_either(c.first().unwrap())) as u16, // we can skip the first hard-clip
             op_off: 0,
-            len: c.iter().map(|o| o.len() as u16).sum(),
+            query_len: c.iter().map(|o| if consumes_either(o) { o.len() } else { 0 } as u16).sum(),
         })
         .collect();
+    eprintln!("{:?}", offsets);
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
 
     let mut sweep_col: usize = 0;
-    while sweep_col < max_length as usize && offsets.iter().any(|o| o.idx < o.len as u16) {
+    while sweep_col < max_length as usize && offsets.iter().any(|o| o.query_idx < o.query_len as u16) {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
                 if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
@@ -70,7 +85,7 @@ pub fn space_fill(
                 if o.cigar.pos() > min_start + sweep_col as i64 {
                     //if result[(i, sweep_col)] == Encoding::End as u16 {
                     // continue
-                } else if o.idx >= o.len {
+                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u16 {
                     //result[(i, sweep_col)] = Encoding::End as u16
                 } else if let Cigar::Ins(ilen) = o.cigar[o.op_i as usize] {
                     o.op_off += 1;
@@ -78,8 +93,8 @@ pub fn space_fill(
                         o.op_i += 1;
                         o.op_off = 0;
                     }
-                    result[(i, sweep_col)] = o.idx - o.dels;
-                    o.idx += 1;
+                    result[(i, sweep_col)] = o.query_idx - o.dels;
+                    o.query_idx += 1;
                 } else {
                     result[(i, sweep_col)] = Encoding::Space as u16;
                 }
@@ -89,21 +104,22 @@ pub fn space_fill(
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
                 if o.cigar.pos() > min_start + sweep_col as i64 {
                     // continue
-                } else if o.idx >= o.len {
+                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u16 {
                     //result[(i, sweep_col)] = Encoding::End as u16;
                 } else {
                     if let Cigar::Del(_) = o.cigar[o.op_i as usize] {
                         o.dels += 1;
                         result[(i, sweep_col)] = Encoding::Space as u16;
                     } else {
-                        result[(i, sweep_col)] = o.idx - o.dels;
+                        // TODO: check the cigar op here? Only for Match() or Mismatch?
+                        result[(i, sweep_col)] = o.query_idx - o.dels;
                     }
                     o.op_off += 1;
                     if o.op_off == o.cigar[o.op_i as usize].len() as u16 {
                         o.op_i += 1;
                         o.op_off = 0;
                     }
-                    o.idx += 1;
+                    o.query_idx += 1;
                 }
             });
         }
@@ -115,13 +131,14 @@ pub fn space_fill(
 }
 
 /// Tracking for converting a group of cigars to a multi-alignment.
+#[derive(Debug)]
 struct CigTracker<'a> {
     cigar: &'a CigarStringView,
-    len: u16,
+    query_len: u16,
     op_i: u16,
     /// tracks which op we are in.
     op_off: u16,
-    idx: u16,
+    query_idx: u16,
     /// total offset within the read.
     dels: u16,
 }

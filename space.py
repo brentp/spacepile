@@ -10,7 +10,7 @@ max_width = 9
 # these are available as aln.cigartuples in pysam.
 # here we show 3 reads for an example.
 cigs = [
-        [(pysam.CMATCH, 4)],                                     # read 1. 4M     ACTG
+        [(pysam.CHARD_CLIP, 100), (pysam.CMATCH, 4)],                                     # read 1. 4M     ACTG
         [(pysam.CMATCH, 2), (pysam.CDEL, 2), (pysam.CMATCH, 1)], # read 2. 2M2D1M  CTC
         [(pysam.CMATCH, 2), (pysam.CINS, 3), (pysam.CMATCH, 2)], # read 2. 2M2D1M ACGGGTG
         ]
@@ -25,7 +25,7 @@ spacepile.space(idxs, cigs, posns)
 assert np.array_equal(idxs,
                 [[    0,    1,65534,65534,65534,    2,    3,65535,65535],
                  [65535,    0,65534,65534,65534,    1,65534,65534,    2],
-                 [    0,    1,    2,    3,    4,    5,    6,65535,65535]])
+                 [    0,    1,    2,    3,    4,    5,    6,65535,65535]]), idxs
 
 
 # sequences likely retrieved from pysam's aln.query_sequence or aln.query_alingment_sequence
