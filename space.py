@@ -56,5 +56,23 @@ assert np.array_equal(mat[len(cigs):],
 			 [-1,60,-2,-2,-2,60,-2,-2,60],
 			 [45,45,45,55,55,55,60,-1,-1]])
 
-print(mat)
+#print(mat)
 # now repeat for many sequences and send many mats to a learner.
+
+# MIDNSHP=XB
+cigs = [
+        #[(0, 172-126), (4, 930)], # 1040S 172M 930S
+        #[(0, 136-126), (2, 2), (0, 34), (5, 1767)],
+        [(4, 1040), (0, 172), (4, 930)], # 1040S 172M 930S
+        [(5, 205), (0, 136), (2, 2), (0, 34), (5, 1767)],
+        [(5, 628), (0, 39), (2, 1), (0, 38), (1, 1), (0, 82), (5, 1354)],
+        [(5, 1899), (0, 36), (2, 1), (0, 72), (1, 2), (0, 27), (5, 106)],
+        [(5, 1487), (0, 40), (1, 1), (0, 99), (5, 515)]
+        ]
+posns = [x + 1040 for x in [0, 0, 8, 21, 33]][:len(cigs)]
+print(posns)
+
+max_width = 177
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+spacepile.space(idxs, cigs, posns)
+print(idxs)
