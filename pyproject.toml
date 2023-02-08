@@ -4,6 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "spacepile"
+dynamic =  ["dependencies"]
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Rust",

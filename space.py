@@ -76,3 +76,23 @@ max_width = 177
 idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
 spacepile.space(idxs, cigs, posns)
 print(idxs)
+
+cigs = [
+        [(4, 799), (0, 16), (1, 2), (0, 23), (2, 1), (0, 90), (4, 12)], # 799S 16M 2I 23M 1D 90M 12 S
+        [(5, 384), (0, 57), (2, 2), (0, 56), (5, 445)],                 # 384H 57M 2D 56M 445H
+        ]
+posns = [21271006, 21271021]
+max_width = 177
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+spacepile.space(idxs, cigs, posns)
+print(idxs)
+
+cigs = [
+        [(5, 239), (0, 20), (2, 2), (0, 35), (5, 648)],
+        [(5, 672), (0, 54), (2, 1), (0, 15), (1, 1), (0, 12), (5, 188)],
+        [(5, 298), (0, 23), (1, 1), (0, 3), (2, 2), (0, 58), (1, 1), (0, 5), (1, 1), (0, 29), (5, 523)]]
+posns = [ 0, 12, 27]
+for max_width in range(10, 100, 10):
+    idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+    spacepile.space(idxs, cigs, posns)
+    print(idxs)
