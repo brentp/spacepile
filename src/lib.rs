@@ -25,7 +25,7 @@ pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u1
     let mut result = Array2::<u16>::zeros((cigars.len(), max_length as usize).f());
 
     let mut v = result.view_mut();
-    space_fill(cigars, max_length, &mut v);
+    space_fill(cigars, max_length, &mut v)?;
     Ok(result)
 }
 
