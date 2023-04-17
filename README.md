@@ -2,7 +2,7 @@
 
 `spacepile` efficiently creates (multi) alignments from replicate measurements of the same piece of DNA as
 from **duplex** sequencing, single molecule consensus, pac-bio **CCS**, or nanopore [**cyclomics**](https://cyclomics.com/).
-`spacepile` accepts alignments (cigars) of grouped sequences and  *spaces* them into matricies that can then be sent to any deep-learner.
+`spacepile` accepts alignments (cigars) of grouped sequences and _spaces_ them into matricies that can then be sent to any deep-learner.
 
 Note that this is done nicely in [deepconsensus](https://github.com/google/deepconsensus) which is a major source
 of inspiration for this work, but that is specific to PacBio and (likely) less efficient at extraction.
@@ -11,7 +11,6 @@ of inspiration for this work, but that is specific to PacBio and (likely) less e
 sample and augment reads and to separate training from test datasets.
 
 Currently `spacepile` can be used by downloading and `pip install`ing the python wheel from the releases.
-
 
 ```Python
 import spacepile
@@ -34,14 +33,16 @@ cigs = [
 posns = [0, 1, 0] # the 2nd read starts 1 base after the other reads.
 
 # idxs will be filled by `space` call.
-idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
 spacepile.space(idxs, cigs, posns)
 
 #  now we have the indexes into the original sequence or base-qualities or IPDs. etc.
+SPACE = np.iinfo(np.uint32) - 1
+END = np.iinfo(np.uint32)
 assert np.array_equal(idxs,
-                [[    0,    1,65534,65534,65534,    2,    3,65535,65535],
-                 [65535,    0,65534,65534,65534,    1,65534,65534,    2],
-                 [    0,    1,    2,    3,    4,    5,    6,65535,65535]])
+                [[    0,    1,SPACE,SPACE,SPACE,    2,    3,END,END],
+                 [END,    0,SPACE,SPACE,SPACE,    1,SPACE,SPACE,    2],
+                 [    0,    1,    2,    3,    4,    5,    6,END,END]])
 
 
 # sequences likely retrieved from pysam's aln.query_sequence or aln.query_alingment_sequence
@@ -74,7 +75,6 @@ assert np.array_equal(mat[len(cigs):],
 
 # now repeat for many sequences and send many mats to a learner.
 ```
-
 
 # Research
 
@@ -121,7 +121,6 @@ network size.
 ### consensus
 
 Take a trained model and a bam and write a new fastq with well-calibrated base-qualities.
-
 
 ## build notes
 
