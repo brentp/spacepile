@@ -18,14 +18,16 @@ cigs = [
 posns = [0, 1, 0] # the 2nd read starts 1 base after the other reads.
 
 # idxs will be filled by `space` call.
-idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
 spacepile.space(idxs, cigs, posns)
 
 #  now we have the indexes into the original sequence or base-qualities or IPDs. etc.
+END = np.iinfo(np.uint32).max
+SPACE = END - 1
 assert np.array_equal(idxs,
-                [[    0,    1,65534,65534,65534,    2,    3,65535,65535],
-                 [65535,    0,65534,65534,65534,    1,65534,65534,    2],
-                 [    0,    1,    2,    3,    4,    5,    6,65535,65535]]), idxs
+                [[    0,    1,SPACE,SPACE,SPACE,    2,    3,END,END],
+                 [END,    0,SPACE,SPACE,SPACE,    1,SPACE,SPACE,    2],
+                 [    0,    1,    2,    3,    4,    5,    6,END,END]]), idxs
 
 
 # sequences likely retrieved from pysam's aln.query_sequence or aln.query_alingment_sequence
@@ -73,7 +75,7 @@ posns = [x + 1040 for x in [0, 0, 8, 21, 33]][:len(cigs)]
 print(posns)
 
 max_width = 177
-idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
 spacepile.space(idxs, cigs, posns)
 print(idxs)
 
@@ -83,7 +85,7 @@ cigs = [
         ]
 posns = [21271006, 21271021]
 max_width = 177
-idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
 spacepile.space(idxs, cigs, posns)
 print(idxs)
 
@@ -93,6 +95,6 @@ cigs = [
         [(5, 298), (0, 23), (1, 1), (0, 3), (2, 2), (0, 58), (1, 1), (0, 5), (1, 1), (0, 29), (5, 523)]]
 posns = [ 0, 12, 27]
 for max_width in range(10, 100, 10):
-    idxs = np.zeros((len(cigs), max_width), dtype=np.uint16)
+    idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
     spacepile.space(idxs, cigs, posns)
     print(idxs)

@@ -21,8 +21,8 @@ enum Encoding {
 
 /// Given a set of Cigar+Positions, create an Array of indexes that can be used to align
 /// the same set of variants.
-pub fn space(cigars: &Vec<CigarStringView>, max_length: u16) -> Result<Array2<u16>> {
-    let mut result = Array2::<u16>::zeros((cigars.len(), max_length as usize).f());
+pub fn space(cigars: &Vec<CigarStringView>, max_length: u32) -> Result<Array2<u32>> {
+    let mut result = Array2::<u32>::zeros((cigars.len(), max_length as usize).f());
 
     let mut v = result.view_mut();
     space_fill(cigars, max_length, &mut v)?;
@@ -39,29 +39,35 @@ fn consumes_either(op: &Cigar, skip_soft: bool) -> bool {
 
 pub fn space_fill(
     cigars: &Vec<CigarStringView>,
-    max_length: u16,
-    result: &mut ArrayViewMut2<u16>,
+    max_length: u32,
+    result: &mut ArrayViewMut2<u32>,
 ) -> Result<()> {
-    result.fill(Encoding::End as u16);
+    result.fill(Encoding::End as u32);
     let mut offsets: Vec<CigTracker> = cigars
         .iter()
         .map(|c| {
             let mut t = CigTracker {
-            cigar: c,
-            query_idx: match c.first().unwrap() {
-                Cigar::SoftClip(n) | Cigar::Pad(n) => *n as u16,
-                _ => 0
-            },
-            dels: 0,
-            op_i: (!consumes_either(c.first().unwrap(), true)) as u16, // we can skip the first hard-clip
-            op_off: 0,
-            query_len: c
-                .iter()
-                .map(|o| if consumes_either(o, false) { o.len() } else { 0 } as u16)
-                .sum(),
-          };
+                cigar: c,
+                query_idx: match c.first().unwrap() {
+                    Cigar::SoftClip(n) | Cigar::Pad(n) => *n,
+                    _ => 0,
+                },
+                dels: 0,
+                op_i: (!consumes_either(c.first().unwrap(), true)) as u32, // we can skip the first hard-clip
+                op_off: 0,
+                query_len: c
+                    .iter()
+                    .map(|o| {
+                        if consumes_either(o, false) {
+                            o.len()
+                        } else {
+                            0
+                        }
+                    })
+                    .sum(),
+            };
             t.query_len -= match t.cigar.last().unwrap() {
-                Cigar::SoftClip(n) => *n as u16,
+                Cigar::SoftClip(n) => *n,
                 _ => 0,
             };
             t
@@ -70,9 +76,7 @@ pub fn space_fill(
     let min_start = offsets.iter().map(|c| c.cigar.pos()).min().unwrap();
 
     let mut sweep_col: usize = 0;
-    while sweep_col < max_length as usize
-        && offsets.iter().any(|o| o.query_idx < o.query_len as u16)
-    {
+    while sweep_col < max_length as usize && offsets.iter().any(|o| o.query_idx < o.query_len) {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
                 if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
@@ -91,20 +95,20 @@ pub fn space_fill(
                 // this read started after. we already filled with Encoding::End above so here we
                 // simply skip
                 if o.cigar.pos() > min_start + sweep_col as i64 {
-                    //if result[(i, sweep_col)] == Encoding::End as u16 {
+                    //if result[(i, sweep_col)] == Encoding::End as u32 {
                     // continue
-                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u16 {
-                    //result[(i, sweep_col)] = Encoding::End as u16
+                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u32 {
+                    //result[(i, sweep_col)] = Encoding::End as u32
                 } else if let Cigar::Ins(ilen) = o.cigar[o.op_i as usize] {
                     o.op_off += 1;
-                    if o.op_off == ilen as u16 {
+                    if o.op_off == ilen {
                         o.op_i += 1;
                         o.op_off = 0;
                     }
                     result[(i, sweep_col)] = o.query_idx - o.dels;
                     o.query_idx += 1;
                 } else {
-                    result[(i, sweep_col)] = Encoding::Space as u16;
+                    result[(i, sweep_col)] = Encoding::Space as u32;
                 }
             });
         } else {
@@ -112,18 +116,18 @@ pub fn space_fill(
             offsets.iter_mut().enumerate().for_each(|(i, o)| {
                 if o.cigar.pos() > min_start + sweep_col as i64 {
                     // continue
-                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u16 {
-                    //result[(i, sweep_col)] = Encoding::End as u16;
+                } else if o.query_idx - o.dels >= o.query_len || o.op_i >= o.cigar.len() as u32 {
+                    //result[(i, sweep_col)] = Encoding::End as u32;
                 } else {
                     if let Cigar::Del(_) = o.cigar[o.op_i as usize] {
                         o.dels += 1;
-                        result[(i, sweep_col)] = Encoding::Space as u16;
+                        result[(i, sweep_col)] = Encoding::Space as u32;
                     } else {
                         // TODO: check the cigar op here? Only for Match() or Mismatch?
                         result[(i, sweep_col)] = o.query_idx - o.dels;
                     }
                     o.op_off += 1;
-                    if o.op_off == o.cigar[o.op_i as usize].len() as u16 {
+                    if o.op_off == o.cigar[o.op_i as usize].len() as u32 {
                         o.op_i += 1;
                         o.op_off = 0;
                     }
@@ -142,13 +146,13 @@ pub fn space_fill(
 #[derive(Debug)]
 struct CigTracker<'a> {
     cigar: &'a CigarStringView,
-    query_len: u16,
-    op_i: u16,
+    query_len: u32,
+    op_i: u32,
     /// tracks which op we are in.
-    op_off: u16,
-    query_idx: u16,
+    op_off: u32,
+    query_idx: u32,
     /// total offset within the read.
-    dels: u16,
+    dels: u32,
 }
 
 #[pymodule]
@@ -161,7 +165,7 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyo3(name = "space")]
     fn rust_space<'py>(
         _py: Python<'py>,
-        arr: &PyArray2<u16>,
+        arr: &PyArray2<u32>,
         py_cigs: &PyList,
         py_positions: &PyList,
     ) -> PyResult<()> {
@@ -212,7 +216,7 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
             })
             .collect();
         //let mut cigs = vec![];
-        _ = space_fill(&cigs, arr.dims()[1] as u16, &mut y);
+        _ = space_fill(&cigs, arr.dims()[1] as u32, &mut y);
         Ok(())
     }
 
@@ -225,7 +229,7 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     #[pyo3(name = "translate")]
     fn translate<'py>(
         _py: Python<'py>,
-        spaced_idxs: &PyArray2<u16>,
+        spaced_idxs: &PyArray2<u32>,
         sequences: &PyArray2<i16>,
         out: &PyArray2<i16>,
     ) -> PyResult<()> {
@@ -243,11 +247,14 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         let spaced_raw = unsafe { spaced_idxs.as_array() };
         let sequences_raw = unsafe { sequences.as_array() };
 
+        const UM1: u32 = u32::MAX - 1;
+
         for i in 0..spaced_idxs.dims()[0] {
             for j in 0..spaced_idxs.dims()[1] {
                 let space_j = spaced_raw[(i, j)];
                 out_mut[(i, j)] = match space_j {
-                    65534 | 65535 => space_j as i16,
+                    u32::MAX => space_j as i16,
+                    UM1 => space_j as i16,
                     _ => sequences_raw[(i, space_j as usize)],
                 }
             }
@@ -277,7 +284,10 @@ mod tests {
         ];
         eprintln!("size:{:?}", std::mem::size_of::<CigTracker>());
         let obs = space(&cigs, 6).expect("oh no");
-        let exp: Array2<u16> = array![[0, 1, 2, 3, 65535, 65535], [65535, 0, 1, 65534, 65534, 2],];
+        let exp: Array2<u32> = array![
+            [0, 1, 2, 3, u32::MAX, u32::MAX],
+            [u32::MAX, 0, 1, u32::MAX - 1, u32::MAX - 1, 2],
+        ];
         //                                                        [0, 1, 65534, 65534, 2, 65535]]
         assert_eq!(obs, exp);
 
@@ -292,10 +302,30 @@ mod tests {
         let obs = space(&cigs, 9).expect("oh no");
 
         // TODO: handle insertion and deletion at same place. not sure this is correct.
-        let exp: Array2<u16> = array![
-            [0, 1, 65534, 65534, 65534, 2, 3, 65535, 65535],
-            [65535, 0, 65534, 65534, 65534, 1, 65534, 65534, 2],
-            [0, 1, 2, 3, 4, 5, 6, 65535, 65535],
+        let exp: Array2<u32> = array![
+            [
+                0,
+                1,
+                u32::MAX - 1,
+                u32::MAX - 1,
+                u32::MAX - 1,
+                2,
+                3,
+                u32::MAX,
+                u32::MAX
+            ],
+            [
+                u32::MAX,
+                0,
+                u32::MAX - 1,
+                u32::MAX - 1,
+                u32::MAX - 1,
+                1,
+                u32::MAX - 1,
+                u32::MAX - 1,
+                2
+            ],
+            [0, 1, 2, 3, 4, 5, 6, u32::MAX, u32::MAX],
         ];
         assert_eq!(obs, exp);
     }
