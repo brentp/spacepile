@@ -40,9 +40,9 @@ spacepile.space(idxs, cigs, posns)
 SPACE = np.iinfo(np.uint32) - 1
 END = np.iinfo(np.uint32)
 assert np.array_equal(idxs,
-                [[    0,    1,SPACE,SPACE,SPACE,    2,    3,END,END],
-                 [END,    0,SPACE,SPACE,SPACE,    1,SPACE,SPACE,    2],
-                 [    0,    1,    2,    3,    4,    5,    6,END,END]])
+                [[  0,    1,SPACE,SPACE,SPACE,    2,    3,END  ,END],
+                 [END,    0,SPACE,SPACE,SPACE,    1,SPACE,SPACE,  2],
+                 [  0,    1,    2,    3,    4,    5,    6,END  ,END]])
 
 
 # sequences likely retrieved from pysam's aln.query_sequence or aln.query_alingment_sequence
