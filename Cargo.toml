@@ -12,7 +12,7 @@ ndarray = { version = "0.15.6", features=["std", "rayon"]}
 numpy =  { version = "0.18.0"}
 rust-htslib = { git = "https://github.com/brentp/rust-htslib", branch="csv-pos", features=["static", "gcs", "s3", "libdeflate"]}
 
-pyo3 = { version = "0.18.0", features=["abi3-py37", "abi3", "extension-module"]}
+pyo3 = { version = "0.18.3", features=["abi3-py37", "abi3", "extension-module"]}
 
 [features]
 extension-module = ["pyo3/extension-module"]

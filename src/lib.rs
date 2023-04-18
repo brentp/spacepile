@@ -2,6 +2,7 @@ use anyhow::Result;
 use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
 use numpy::PyArray2;
+use pyo3::prelude::*;
 use pyo3::{
     exceptions, pymodule,
     types::{PyList, PyModule},
@@ -157,17 +158,16 @@ struct CigTracker<'a> {
 
 #[pymodule]
 fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    /// space(array, py_cigs, py_positions, /)
-    /// --
-    ///
     /// fill array with spaced from py_cigs and positions. array.shape[0] == len(py_cigs) == len(py_positions)
-    #[pyfn(m)]
+    #[pyfunction]
     #[pyo3(name = "space")]
     fn rust_space<'py>(
         _py: Python<'py>,
         arr: &PyArray2<u32>,
         py_cigs: &PyList,
         py_positions: &PyList,
+        label_position: Option<i64>,
+        label_cigs: Option<&PyList>,
     ) -> PyResult<()> {
         //let mut y = x.readwrite();
         let mut y = unsafe { arr.as_array_mut() };
@@ -224,12 +224,11 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         }
     }
 
-    /// translate(space, array, /)
-    /// --
-    ///
+    m.add_function(wrap_pyfunction!(rust_space, m)?)?;
+
     /// use `space` to translate  `sequences` (of sequence or BQs, for example) into `array`. `space` and `array` must be
     /// the same shape and `len(sequences) == space.shape[0]`
-    #[pyfn(m)]
+    #[pyfunction]
     #[pyo3(name = "translate")]
     fn translate<'py>(
         _py: Python<'py>,
@@ -266,7 +265,7 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         Ok(())
     }
 
-    Ok(())
+    m.add_function(wrap_pyfunction!(translate, m)?)
 }
 
 #[cfg(test)]

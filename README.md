@@ -37,15 +37,15 @@ idxs = np.zeros((len(cigs), max_width), dtype=np.uint32)
 spacepile.space(idxs, cigs, posns)
 
 #  now we have the indexes into the original sequence or base-qualities or IPDs. etc.
-SPACE = np.iinfo(np.uint32) - 1
-END = np.iinfo(np.uint32)
+SPACE = np.iinfo(np.uint32).max - 1
+END = np.iinfo(np.uint32).max
 assert np.array_equal(idxs,
                 [[  0,    1,SPACE,SPACE,SPACE,    2,    3,END  ,END],
                  [END,    0,SPACE,SPACE,SPACE,    1,SPACE,SPACE,  2],
                  [  0,    1,    2,    3,    4,    5,    6,END  ,END]])
 
 
-# sequences likely retrieved from pysam's aln.query_sequence or aln.query_alingment_sequence
+# sequences likely retrieved from pysam's aln.query_sequence or aln.query_alignment_sequence
 raw_sequences = ["ACTG", "CTC", "ACGGGTG"]
 base_qs =       [[ 40, 50, 60, 70], [60, 60, 60], [45, 45, 45, 55, 55, 55, 60]]
 
