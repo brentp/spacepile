@@ -215,9 +215,13 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
                 )
             })
             .collect();
-        //let mut cigs = vec![];
-        _ = space_fill(&cigs, arr.dims()[1] as u32, &mut y);
-        Ok(())
+        match space_fill(&cigs, arr.dims()[1] as u32, &mut y) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(exceptions::PyTypeError::new_err(format!(
+                "space: error filling array: {:?}",
+                e
+            ))),
+        }
     }
 
     /// translate(space, array, /)
