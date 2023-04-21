@@ -41,32 +41,30 @@ fn consumes_either(op: &Cigar, skip_soft: bool) -> bool {
 pub fn remove_label_only_insertions_rs(y: &mut ArrayViewMut2<u32>) -> Result<()> {
     let (rows, cols) = (y.shape()[0], y.shape()[1]);
     // now we get the final row which is the label row.
-    let label_row = y.slice(s![rows - 1, ..]).to_owned();
-    // then we find where label row had a value of Encode::Space as u32
-    label_row
-        .iter()
+
+    // iterate over each column in y and check if all rows are space except the label.
+    let label_only_insertion_cols = y
+        .axis_iter(Axis(1))
         .enumerate()
-        .filter(|(_, &v)| v == Encoding::Space as u32)
-        .for_each(|(i, _)| {
-            eprintln!(" found label gap at {}", i);
-            // now we check if this gap is in any other row.
-            let label_only = y
-                .slice(s![..rows - 1, ..])
-                .axis_iter(Axis(0))
-                .any(|row| row[i] != Encoding::Space as u32);
+        .filter(|(_, col)| {
+            col.slice(s![..rows - 1])
+                .iter()
+                .all(|&v| v == Encoding::Space as u32)
+        })
+        .map(|(i, _)| i)
+        .collect::<Vec<_>>();
+    eprintln!("label only insertion cols: {:?}", label_only_insertion_cols);
 
-            eprintln!("label only: {}", label_only);
-            if !label_only {
-                return;
-            }
-
-            // if it's not in any other row, then for all non-label rows, we shift all values left of it to the right by 1.
-            for mut row in y.slice_mut(s![..rows - 1, ..]).axis_iter_mut(Axis(0)) {
-                let right = row.slice(s![i + 1..]).into_owned();
-                right.assign_to(&mut row.slice_mut(s![i..cols - 1]));
-                row[cols - 1] = Encoding::End as u32;
-            }
-        });
+    // for each label_only_insertion_col, we need to shift all the columns to the right of it to the left
+    // by 1.
+    for col in label_only_insertion_cols {
+        for mut row in y.slice_mut(s![..rows - 1, ..]).axis_iter_mut(Axis(0)) {
+            // TODO: how to do this without copy here?
+            let right = row.slice(s![col + 1..]).into_owned();
+            right.assign_to(&mut row.slice_mut(s![col..cols - 1]));
+            row[cols - 1] = Encoding::End as u32;
+        }
+    }
 
     Ok(())
 }
@@ -400,9 +398,9 @@ mod tests {
         // R: AA-AA
         // L: AAAAA
         a[(0, 2)] = Encoding::Space as u32;
-        a[(1, 4)] = Encoding::End as u32;
         eprintln!("{:?}", a);
         remove_label_only_insertions_rs(&mut a.view_mut()).expect("oh no");
+        eprintln!("{:?}", a);
 
         let exp = array![[0, 0, 0, 0, Encoding::End as u32], [0, 0, 0, 0, 0],];
         assert_eq!(a, exp);
