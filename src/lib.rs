@@ -397,17 +397,14 @@ mod tests {
     fn test_remove_label_only_insertions() {
         // create an array of shape (2, 5) with a gap in the middle
         let mut a = Array2::<u32>::zeros((2, 5));
-        // AAAA$
-        // AA-AA
-        a[(0, 4)] = Encoding::End as u32;
-        a[(1, 2)] = Encoding::Space as u32;
+        // R: AA-AA
+        // L: AAAAA
+        a[(0, 2)] = Encoding::Space as u32;
+        a[(1, 4)] = Encoding::End as u32;
         eprintln!("{:?}", a);
         remove_label_only_insertions_rs(&mut a.view_mut()).expect("oh no");
 
-        let exp = array![
-            [0, 0, 0, 0, Encoding::End as u32],
-            [0, 0, Encoding::Space as u32, 0, 0]
-        ];
+        let exp = array![[0, 0, 0, 0, Encoding::End as u32], [0, 0, 0, 0, 0],];
         assert_eq!(a, exp);
     }
     /*
