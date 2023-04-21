@@ -38,6 +38,39 @@ fn consumes_either(op: &Cigar, skip_soft: bool) -> bool {
     }
 }
 
+pub fn remove_label_only_insertions_rs(y: &mut ArrayViewMut2<u32>) -> Result<()> {
+    let (rows, cols) = (y.shape()[0], y.shape()[1]);
+    // now we get the final row which is the label row.
+    let label_row = y.slice(s![rows - 1, ..]).to_owned();
+    // then we find where label row had a value of Encode::Space as u32
+    label_row
+        .iter()
+        .enumerate()
+        .filter(|(_, &v)| v == Encoding::Space as u32)
+        .for_each(|(i, _)| {
+            eprintln!(" found label gap at {}", i);
+            // now we check if this gap is in any other row.
+            let label_only = y
+                .slice(s![..rows - 1, ..])
+                .axis_iter(Axis(0))
+                .any(|row| row[i] != Encoding::Space as u32);
+
+            eprintln!("label only: {}", label_only);
+            if !label_only {
+                return;
+            }
+
+            // if it's not in any other row, then for all non-label rows, we shift all values left of it to the right by 1.
+            for mut row in y.slice_mut(s![..rows - 1, ..]).axis_iter_mut(Axis(0)) {
+                let right = row.slice(s![i + 1..]).into_owned();
+                right.assign_to(&mut row.slice_mut(s![i..cols - 1]));
+                row[cols - 1] = Encoding::End as u32;
+            }
+        });
+
+    Ok(())
+}
+
 pub fn space_fill(
     cigars: &Vec<CigarStringView>,
     max_length: u32,
@@ -156,6 +189,7 @@ struct CigTracker<'a> {
     dels: u32,
 }
 
+/// create a rust-htslib cigar string from a python cigar string.
 fn extract_cigar<'a>(cl: &PyAny, i: i64) -> CigarStringView {
     let cs: Vec<Cigar> = cl
         .downcast::<PyList>()
@@ -192,14 +226,10 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         arr: &PyArray2<u32>,
         py_cigs: &PyList,
         py_positions: &PyList,
-
-        label_arr: Option<&PyArray1<u32>>,
-        label_cigs: Option<&PyList>,
-        label_position: Option<i64>,
     ) -> PyResult<()> {
-        //let mut y = x.readwrite();
         // now get arr as a writeable, mutable array
         let mut y = unsafe { arr.as_array_mut() };
+
         if py_cigs.len() != py_positions.len() {
             return Err(exceptions::PyTypeError::new_err(
                 "space: expecting py_cigs and py_positions of equal length",
@@ -208,13 +238,6 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
         if py_cigs.len() != arr.dims()[0] {
             return Err(exceptions::PyTypeError::new_err(
                 "space: expecting py_cigs to have length equal to rows in arr",
-            ));
-        }
-        if label_position.is_some() != label_cigs.is_some()
-            || label_position.is_some() != label_arr.is_some()
-        {
-            return Err(exceptions::PyTypeError::new_err(
-                "space: if either label_position, label_arr, or label_cigs is specified, all must be specified",
             ));
         }
 
@@ -240,8 +263,28 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
             ))),
         }
     }
-
     m.add_function(wrap_pyfunction!(rust_space, m)?)?;
+
+    #[pyfunction]
+    #[pyo3(name = "remove_label_only_insertions")]
+    fn remove_label_only_insertions<'py>(
+        _py: Python<'py>,
+        spaced_idxs: &PyArray2<u32>,
+    ) -> PyResult<()> {
+        // we remove any gaps in the label row that are not in the other rows.
+        // a gap is a value of Encoding::Space as u32
+        // we do this by iterating over the label row, and if we find a gap, we check if it is in any other row.
+        // if it is not, we remove it. Now write the code for this.
+        let mut y = unsafe { spaced_idxs.as_array_mut() };
+        match remove_label_only_insertions_rs(&mut y) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(exceptions::PyTypeError::new_err(format!(
+                "remove_label_only_insertions: error: {:?}",
+                e
+            ))),
+        }
+    }
+    m.add_function(wrap_pyfunction!(remove_label_only_insertions, m)?)?;
 
     /// use `space` to translate  `sequences` (of sequence or BQs, for example) into `array`. `space` and `array` must be
     /// the same shape and `len(sequences) == space.shape[0]`
@@ -350,6 +393,23 @@ mod tests {
         assert_eq!(obs, exp);
     }
 
+    #[test]
+    fn test_remove_label_only_insertions() {
+        // create an array of shape (2, 5) with a gap in the middle
+        let mut a = Array2::<u32>::zeros((2, 5));
+        // AAAA$
+        // AA-AA
+        a[(0, 4)] = Encoding::End as u32;
+        a[(1, 2)] = Encoding::Space as u32;
+        eprintln!("{:?}", a);
+        remove_label_only_insertions_rs(&mut a.view_mut()).expect("oh no");
+
+        let exp = array![
+            [0, 0, 0, 0, Encoding::End as u32],
+            [0, 0, Encoding::Space as u32, 0, 0]
+        ];
+        assert_eq!(a, exp);
+    }
     /*
         #[test]
         fn test_from_python() {
