@@ -129,11 +129,7 @@ pub fn space_fill(
     while sweep_col < max_length as usize && offsets.iter().any(|o| o.query_idx < o.query_len) {
         let any_insertion = offsets.iter().any(|o| {
             if (o.op_i as usize) < o.cigar.iter().len() {
-                if let Cigar::Ins(_) = o.cigar[o.op_i as usize] {
-                    true
-                } else {
-                    false
-                }
+                matches!(o.cigar[o.op_i as usize], Cigar::Ins(_))
             } else {
                 false
             }
@@ -177,7 +173,7 @@ pub fn space_fill(
                         result[(i, sweep_col)] = o.query_idx - o.dels;
                     }
                     o.op_off += 1;
-                    if o.op_off == o.cigar[o.op_i as usize].len() as u32 {
+                    if o.op_off == o.cigar[o.op_i as usize].len() {
                         o.op_i += 1;
                         o.op_off = 0;
                     }
@@ -206,7 +202,7 @@ struct CigTracker<'a> {
 }
 
 /// create a rust-htslib cigar string from a python cigar string.
-fn extract_cigar<'a>(cl: &PyAny, i: i64) -> CigarStringView {
+fn extract_cigar(cl: &PyAny, i: i64) -> CigarStringView {
     let cs: Vec<Cigar> = cl
         .downcast::<PyList>()
         .expect("expecting list as 3rd argument to 'space'")
