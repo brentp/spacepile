@@ -38,6 +38,9 @@ fn consumes_either(op: &Cigar, skip_soft: bool) -> bool {
     }
 }
 
+/// for each column in y, check if all rows are space except the label.
+/// if so, remove the column and shift all columns to the right left by 1.
+/// idxs tracks the lookup of a read column to the label.
 pub fn remove_label_only_insertions_rs(
     y: &mut ArrayViewMut2<u32>,
     idxs: &mut ArrayViewMut1<u32>,
@@ -71,8 +74,7 @@ pub fn remove_label_only_insertions_rs(
         idx += 1;
     }
 
-    // for each label_only_insertion_col, we need to shift all the columns to the right of it to the left
-    // by 1.
+    // for each label_only_insertion, shift all the columns to the right left by 1.
     for col in label_only_insertion_cols {
         for mut row in y.slice_mut(s![..rows - 1, ..]).axis_iter_mut(Axis(0)) {
             // TODO: how to do this without copy here?
@@ -412,15 +414,22 @@ mod tests {
     #[test]
     fn test_remove_label_only_insertions() {
         // create an array of shape (2, 5) with a gap in the middle
-        let mut a = Array2::<u32>::zeros((2, 5));
+        let mut a = Array2::<u32>::zeros((3, 5));
         let mut idx = Array1::<u32>::zeros(5);
-        // R: AT-GC
-        // L: AAAGC
+        // R1: AT-GC
+        // R2: AA-GC
+        // L : AAAGC
         a[(0, 2)] = Encoding::Space as u32;
+        a[(1, 2)] = Encoding::Space as u32;
         remove_label_only_insertions_rs(&mut a.view_mut(), &mut idx.view_mut()).expect("oh no");
-        let exp = array![[0, 0, 0, 0, Encoding::End as u32], [0, 0, 0, 0, 0],];
+        let exp = array![
+            [0, 0, 0, 0, Encoding::End as u32], // the 0's here are not important. real data
+            [0, 0, 0, 0, Encoding::End as u32], // will have these as the base-encoded values.
+            [0, 0, 0, 0, 0],
+        ];
         assert_eq!(a, exp);
 
+        // idx is a lookup from read_index to label index.
         assert_eq!(idx, array![0, 1, 3, 4, Encoding::End as u32]);
     }
     /*
