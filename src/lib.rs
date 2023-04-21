@@ -38,22 +38,38 @@ fn consumes_either(op: &Cigar, skip_soft: bool) -> bool {
     }
 }
 
-pub fn remove_label_only_insertions_rs(y: &mut ArrayViewMut2<u32>) -> Result<()> {
+pub fn remove_label_only_insertions_rs(
+    y: &mut ArrayViewMut2<u32>,
+    idxs: &mut ArrayViewMut1<u32>,
+) -> Result<()> {
     let (rows, cols) = (y.shape()[0], y.shape()[1]);
     // now we get the final row which is the label row.
+    let mut idx = 0;
 
     // iterate over each column in y and check if all rows are space except the label.
     let label_only_insertion_cols = y
         .axis_iter(Axis(1))
         .enumerate()
-        .filter(|(_, col)| {
-            col.slice(s![..rows - 1])
+        .filter(|(i, col)| {
+            let f = col
+                .slice(s![..rows - 1])
                 .iter()
-                .all(|&v| v == Encoding::Space as u32)
+                .all(|&v| v == Encoding::Space as u32);
+
+            if !f {
+                idxs[idx] = *i as u32;
+                idx += 1;
+            }
+            f
         })
         .map(|(i, _)| i)
         .collect::<Vec<_>>();
-    eprintln!("label only insertion cols: {:?}", label_only_insertion_cols);
+    // since we increment after setting in the loop.
+    // we check less than here instead of < cols - 1.
+    while idx < cols {
+        idxs[idx] = Encoding::End as u32;
+        idx += 1;
+    }
 
     // for each label_only_insertion_col, we need to shift all the columns to the right of it to the left
     // by 1.
@@ -268,13 +284,15 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     fn remove_label_only_insertions<'py>(
         _py: Python<'py>,
         spaced_idxs: &PyArray2<u32>,
+        label_idxs: &PyArray1<u32>,
     ) -> PyResult<()> {
         // we remove any gaps in the label row that are not in the other rows.
         // a gap is a value of Encoding::Space as u32
         // we do this by iterating over the label row, and if we find a gap, we check if it is in any other row.
         // if it is not, we remove it. Now write the code for this.
         let mut y = unsafe { spaced_idxs.as_array_mut() };
-        match remove_label_only_insertions_rs(&mut y) {
+        let mut label_is = unsafe { label_idxs.as_array_mut() };
+        match remove_label_only_insertions_rs(&mut y, &mut label_is) {
             Ok(_) => Ok(()),
             Err(e) => Err(exceptions::PyTypeError::new_err(format!(
                 "remove_label_only_insertions: error: {:?}",
@@ -395,15 +413,15 @@ mod tests {
     fn test_remove_label_only_insertions() {
         // create an array of shape (2, 5) with a gap in the middle
         let mut a = Array2::<u32>::zeros((2, 5));
-        // R: AA-AA
-        // L: AAAAA
+        let mut idx = Array1::<u32>::zeros(5);
+        // R: AT-GC
+        // L: AAAGC
         a[(0, 2)] = Encoding::Space as u32;
-        eprintln!("{:?}", a);
-        remove_label_only_insertions_rs(&mut a.view_mut()).expect("oh no");
-        eprintln!("{:?}", a);
-
+        remove_label_only_insertions_rs(&mut a.view_mut(), &mut idx.view_mut()).expect("oh no");
         let exp = array![[0, 0, 0, 0, Encoding::End as u32], [0, 0, 0, 0, 0],];
         assert_eq!(a, exp);
+
+        assert_eq!(idx, array![0, 1, 3, 4, Encoding::End as u32]);
     }
     /*
         #[test]
