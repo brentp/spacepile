@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ndarray::prelude::*;
 use ndarray::ArrayViewMut2;
-use numpy::PyArray2;
+use numpy::{PyArray1, PyArray2};
 use pyo3::prelude::*;
 use pyo3::{
     exceptions, pymodule,
@@ -156,20 +156,49 @@ struct CigTracker<'a> {
     dels: u32,
 }
 
+fn extract_cigar<'a>(cl: &PyAny, i: i64) -> CigarStringView {
+    let cs: Vec<Cigar> = cl
+        .downcast::<PyList>()
+        .expect("expecting list as 3rd argument to 'space'")
+        .iter()
+        .map(|t| {
+            let (op, len) = t.extract().unwrap();
+            match op {
+                0 => Cigar::Match(len),
+                1 => Cigar::Ins(len),
+                2 => Cigar::Del(len),
+                3 => Cigar::RefSkip(len),
+                4 => Cigar::SoftClip(len),
+                5 => Cigar::HardClip(len),
+                6 => Cigar::Pad(len),
+                7 => Cigar::Equal(len),
+                8 => Cigar::Diff(len),
+                _ => panic!("Unexpected cigar operation"),
+            }
+        })
+        .collect();
+    CigarString(cs).into_view(i)
+}
+
 #[pymodule]
 fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    /// fill array with spaced from py_cigs and positions. array.shape[0] == len(py_cigs) == len(py_positions)
+    /// fill array with spaced from py_cigs and positions. array.shape[0] == len(py_cigs) == len(py_positions) (or +1 if label is given)
+    /// if a label position and cigs are provided, then arr.shape[0] == len(py_cigs) + 1.
     #[pyfunction]
     #[pyo3(name = "space")]
     fn rust_space<'py>(
         _py: Python<'py>,
+
         arr: &PyArray2<u32>,
         py_cigs: &PyList,
         py_positions: &PyList,
-        label_position: Option<i64>,
+
+        label_arr: Option<&PyArray1<u32>>,
         label_cigs: Option<&PyList>,
+        label_position: Option<i64>,
     ) -> PyResult<()> {
         //let mut y = x.readwrite();
+        // now get arr as a writeable, mutable array
         let mut y = unsafe { arr.as_array_mut() };
         if py_cigs.len() != py_positions.len() {
             return Err(exceptions::PyTypeError::new_err(
@@ -181,32 +210,20 @@ fn spacepile(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
                 "space: expecting py_cigs to have length equal to rows in arr",
             ));
         }
+        if label_position.is_some() != label_cigs.is_some()
+            || label_position.is_some() != label_arr.is_some()
+        {
+            return Err(exceptions::PyTypeError::new_err(
+                "space: if either label_position, label_arr, or label_cigs is specified, all must be specified",
+            ));
+        }
 
         let cigs: Vec<CigarStringView> = py_cigs
             .iter()
             .enumerate()
             .map(|(i, cl)| {
-                let cs: Vec<Cigar> = cl
-                    .downcast::<PyList>()
-                    .expect("expecting list as 3rd argument to 'space'")
-                    .iter()
-                    .map(|t| {
-                        let (op, len) = t.extract().unwrap();
-                        match op {
-                            0 => Cigar::Match(len),
-                            1 => Cigar::Ins(len),
-                            2 => Cigar::Del(len),
-                            3 => Cigar::RefSkip(len),
-                            4 => Cigar::SoftClip(len),
-                            5 => Cigar::HardClip(len),
-                            6 => Cigar::Pad(len),
-                            7 => Cigar::Equal(len),
-                            8 => Cigar::Diff(len),
-                            _ => panic!("Unexpected cigar operation"),
-                        }
-                    })
-                    .collect();
-                CigarString(cs).into_view(
+                extract_cigar(
+                    cl,
                     py_positions
                         .get_item(i)
                         .expect("expecting element for position {i}")

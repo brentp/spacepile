@@ -1,5 +1,22 @@
 # spacepile (WIP)
 
+# proposed usage
+
+```Python
+import spacepile
+
+# spacing will be filled by `space` call.
+spacing = np.zeros((len(cigs), max_width), dtype=np.uint32)
+spacepile.space(spacing, cigs, posns)
+
+# now with label (truth)
+spacing = np.zeros((len(cigs) + 1, max_width), dtype=np.uint32)
+spacepile.space(spacing, cigs, posns, label_cigs, label_posn)
+# how to return mapping from spacing column to label? after removing label_only insertions?
+
+
+```
+
 `spacepile` efficiently creates (multi) alignments from replicate measurements of the same piece of DNA as
 from **duplex** sequencing, single molecule consensus, pac-bio **CCS**, or nanopore [**cyclomics**](https://cyclomics.com/).
 `spacepile` accepts alignments (cigars) of grouped sequences and _spaces_ them into matricies that can then be sent to any deep-learner.
